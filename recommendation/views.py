@@ -1,6 +1,7 @@
 import os
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor
 from spellchecker import SpellChecker
 from django.http import JsonResponse
 import numpy as np
@@ -38,6 +39,37 @@ if not sp:
           client_secret=os.environ.get('SPOTIFY_CLIENT_SECRET'),
       )
   )
+
+# helper function to fetch cover art 
+def fetch_song_cover(x):
+    track = x["track"]
+    artist = x["artist"]
+    cover_url = None 
+    query = f"track:{track} artist:{artist}"
+
+    try: 
+        results = sp.search(q=query, type="track", limit=1)
+        items = results.get('tracks',{}).get('items', [])
+        if items and items[0]['album']['images']:
+            cover_url= items[0]['album']['images'][0]['url']
+        else:
+            cover_url = static("users/alt_cover.png")
+    except Exception as e: 
+        print(f"Error fetching the cover art for '{track}: {e}")
+        cover_url = static("users/alt_cover.png")
+
+    return{
+        'title': track, 
+        'artist': artist, 
+        'cover_url': cover_url, 
+
+    }
+
+
+
+
+
+
 
 # helper function to convert nan values from pandas to defaults 
 def clean_val(val, default="unknown"):
@@ -233,12 +265,14 @@ def collaborative_filtering(username):
     #similarity matrix
     similarity_matrix = cosine_similarity(user_song_ratings_pivot)
     similarity_matrix_df = pd.DataFrame(similarity_matrix, index=user_song_ratings_pivot.index, columns = user_song_ratings_pivot.index)
+
     #similarity_matrix_df.to_csv("similarity_matrix.csv", index=False)
     user_name = username
     similarities = similarity_matrix_df[user_name].drop(user_name)
     weights = similarities/similarities.sum()
     n= 10 # number of similar users 
     user_similarity_threshold = 0.1 #change according to size of user database 
+
     # get the top similar users
     most_similar_user = similarity_matrix_df[similarity_matrix_df[user_name]>user_similarity_threshold][user_name].sort_values(ascending=False)[:n]
     if most_similar_user.index[0] == user_name: 
@@ -307,7 +341,11 @@ def get_recommendation(request):
         print("DEBUG id2label_mapping:",label_map)
         print("DEBUG predicted_idx:", predicted_idx)
         print("DEBUG str(predicted_idx):", str(predicted_idx))
+
+
         predicted_label = label_map[str(predicted_idx)]
+
+
         emotion_probabilities = []
         for i, prob in enumerate(probs):
             label = label_map[str(i)]
@@ -377,6 +415,8 @@ def get_recommendation(request):
             index = SONG_DATASET.index
         )
         song_dataset_encoded = pd.concat([SONG_DATASET.drop('genre', axis=1), encoded_song_dataset], axis=1)
+
+
         # normalizing main vector values:
         song_dataset_encoded['loudness'] = (
             (song_dataset_encoded['loudness']-song_dataset_encoded['loudness'].min())/(song_dataset_encoded['loudness'].max()-song_dataset_encoded['loudness'].min())
@@ -388,6 +428,8 @@ def get_recommendation(request):
         song_dataset_encoded['tempo'] = (
             (song_dataset_encoded['tempo']-song_dataset_encoded['tempo'].min())/(song_dataset_encoded['tempo'].max()-song_dataset_encoded['tempo'].min())
         )
+
+
         # reindex the dummy encoded to match the main song dataset encded columns
         user_df_encoded_aligned = user_df_encoded.reindex(columns=song_dataset_encoded.columns, fill_value=0)
 
@@ -454,6 +496,8 @@ def get_recommendation(request):
             # set the max clusters 
             max_clusters = len(X)+ 1
             wcss = []
+
+
             for i in range(1, max_clusters):
                 kmeans = KMeans(n_clusters=i, init='k-means++', random_state=42)
                 kmeans.fit(X)
@@ -463,11 +507,15 @@ def get_recommendation(request):
             if n_clusters is None or n_clusters < 1:
                 n_clusters = 2
             print("Optimal number of clusters:", n_clusters)
+
+
             # fit KMeans with optimal clusters
             kmeans = KMeans(n_clusters=n_clusters, init='k-means++', random_state=42)
             y_kmeans = kmeans.fit_predict(X)
             songs_with_clusters = user_df_encoded_aligned.copy()
             songs_with_clusters['cluster'] = y_kmeans
+
+
             # get distances and select representatives
             representatives = []
             song_distances = []
@@ -490,6 +538,8 @@ def get_recommendation(request):
                     temp_distances = [item for item in temp_distances if item[1] != min_idx] # remove this song from temp distances
 
                 representatives.extend(remaining)
+
+
             #get top fve songs
             top_5_songs = songs_with_clusters.iloc[representatives][['artist_name', 'track_name'] + cols]
             user_df_encoded_aligned = top_5_songs.reset_index(drop=True)
@@ -519,10 +569,7 @@ def get_recommendation(request):
         def get_euclidean_distance(a,b):
             return np.linalg.norm(a - b)
 
-        #distances = []
-        #for user_vec in user_final_vectors:
-            #dist_scores = [get_euclidean_distance(user_vec, main_vec) for main_vec in main_vectors]
-            #distances.append(dist_scores)
+        
 
         distances = cdist(user_final_vectors, main_vectors, metric='euclidean')
         recommendations = []
@@ -538,10 +585,19 @@ def get_recommendation(request):
             sorted_indices = np.argsort(scores)
             filtered_indices = []
             print(f"\nRecommendations for: {user_df.iloc[i]['track_name']}")
+
+
+            dataset_emotions = SONG_DATASET['emotion'].values
+            dataset_tracks = SONG_DATASET['track_name'].values
+            dataset_artists = SONG_DATASET['artist_name'].values
+
+
+
+
             for idx in sorted_indices:
-               song_emotion = SONG_DATASET.iloc[idx]['emotion']
-               song_track = SONG_DATASET.iloc[idx]['track_name']
-               song_artist = SONG_DATASET.iloc[idx]['artist_name']
+               song_emotion = dataset_emotions[idx]
+               song_track = dataset_tracks[idx]
+               song_artist = dataset_artists[idx]
                match = False
 
                # if the song is the same as what the user liked already, skip it to avoid redundancy
@@ -574,18 +630,22 @@ def get_recommendation(request):
 
             for idx in filtered_indices:
                 #handle duplicates
-                song = (SONG_DATASET.iloc[idx]['track_name'], SONG_DATASET.iloc[idx]['artist_name'])
+                track = dataset_tracks[idx]
+                artist = dataset_tracks[idx]
+                
+                song = (track, artist)
+
+
                 if song in rec_pair:
                     continue
 
                 # append final recommendations array
                 row = SONG_DATASET.iloc[idx]
                 recommendations.append({
-                #"user_song": user_df.iloc[i]['track_name'],
-                "track": row['track_name'],
-                "artist": row['artist_name'],
-                #"emotion": row['emotion']
+                "track":track, 
+                "artist": artist,
                 })
+                rec_pair.add(song)
             
 
         
@@ -622,30 +682,9 @@ def get_recommendation(request):
 
         print("length of recs", len(recommendations)) # for debugging
 
-        for x in recommendations:
-            track = x["track"]
-            artist = x["artist"]
-            cover_url = None
-            query = f"track:{track} artist:{artist}"
-            try:
-                results = sp.search(q=query, type="track", limit=1)
-                items = results.get('tracks', {}).get('items',[])
-                if items and items[0]['album']['images']:
-                    cover_url = items[0]['album']['images'][0]['url']
-                else:
-                    cover_url = static("users/alt_cover.png")
-
-            except Exception as e:
-                print(f"Error fetching cover art for '{track}': {e}")
-
-            songs_with_cover_art.append({
-                'title': track,
-                'artist': artist,
-                'cover_url': cover_url,
-                
-            })
-
-            hide_intro = True
+        with ThreadPoolExecutor(max_workers = 5) as executor: 
+            songs_with_cover_art = list(executor.map(fetch_song_cover, recommendations))
+        hide_intro = True
       
    
     return render(request, "recommendation/get_recommendation.html", {
