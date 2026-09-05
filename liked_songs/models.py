@@ -23,6 +23,7 @@ class FavoriteSong(models.Model):
     liveness = models.CharField(max_length=200, default="unknown") 
     valence = models.CharField(max_length=200, default="unknown")
     tempo = models.CharField(max_length=200, default="unknown")
+    cover_url = models.URLField(max_length=500, blank=True, null=True)
     
     
   

@@ -23,7 +23,7 @@ if not sp:
       )
   )
 
-  
+
 SONG_DATASET = pd.read_csv('song_dataset_16_aug.csv')
 
 
@@ -90,8 +90,18 @@ def enter_favorites(request):
             if row.empty:
                 errors[idx] = f"'{title}' by {artist} is not in our dataset, please try another."
                 continue
-            
             song_data = row.iloc[0]
+            cover_url = None
+            query = f"track:{song_data['track_name']} artist:{song_data['artist_name']}"
+            try:
+                results = sp.search(q=query, type="track", limit=1)
+                items = results.get('tracks', {}).get('items')
+                if items: 
+                    cover_url = items[0]['album']['images'][0]['url']
+            except Exception as e: 
+                print(f"Error fetching cover art for '{song_data['track_name']}': {e}")
+            
+            
             FavoriteSong.objects.create(
                 user=request.user,
                 rating=5,
@@ -109,6 +119,7 @@ def enter_favorites(request):
                 liveness=song_data.get('liveness', "unknown"),
                 valence=song_data.get('valence', "unknown"),
                 tempo=song_data.get('tempo', "unknown"),
+                cover_url=cover_url
             )
             songs_added.append(f"{song_data['track_name']} by {song_data['artist_name']}")
 
@@ -118,7 +129,7 @@ def enter_favorites(request):
         if errors:
             messages.warning(request, "Some songs were not found in our dataset or are already added to your liked songs. Please check and try again.")
 
-    return render(request, 'liked_songs/enter_favorites.html', {"prev_data": prev_data, "errors": {}})
+    return render(request, 'liked_songs/enter_favorites.html', {"prev_data": prev_data, "errors": errors})
 
 
 
@@ -126,31 +137,13 @@ def enter_favorites(request):
 
 @login_required
 def liked_songs(request):
-    # Get user's saved songs
-    songs_qs = FavoriteSong.objects.filter(user=request.user)
-
-    songs_with_art = []
-    
     if request.method == "POST":
         return redirect('liked_songs:enter_favorites')
-    for song in songs_qs:
-        cover_url = None
-        query = f"track:{song.track_name} artist:{song.artist_name}"
-        try:
-            results = sp.search(q=query, type="track", limit=1)
-            items = results.get('tracks', {}).get('items')
-            if items:
-                cover_url = items[0]['album']['images'][0]['url']
-        except Exception as e:
-            print(f"Error fetching cover art for '{song.track_name}': {e}")
-        
-        songs_with_art.append({
-            'title': song.track_name,
-            'artist': song.artist_name,
-            'cover_url': cover_url
-        })
 
-    return render(request, 'liked_songs/liked_songs.html', {'songs': songs_with_art})
+    # allows for an instant query wihtout the api calls for faster loading
+    songs = FavoriteSong.objects.filter(user=request.user)
+
+    return render(request, 'liked_songs/liked_songs.html', {'songs': songs})
 
 @login_required
 def delete_liked(request):
