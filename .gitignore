@@ -6,3 +6,4 @@ venv/
 .env.local
 .cache/
 honours_project/song_dataset_16_aug.csv
+*.csv
