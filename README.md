@@ -1,4 +1,4 @@
-# 🎵 AI-Powered Emotion-Based Music Recommendation System
+# AI-Powered Emotion-Based Music Recommendation System
 
 > **Honours Research Project** | *A full-stack hybrid recommendation engine integrating emotion classification with content-based and collaborative filtering.*
 
@@ -8,7 +8,7 @@
 
 ---
 
-## 📌 Research & System Overview
+##  Research & System Overview
 
 
 
@@ -21,7 +21,7 @@ Built as a full-stack web application using Django and PostgreSQL, the system bl
 
 ---
 
-## 🛠️ Tech Stack & Environment
+## Tech Stack & Environment
 
 * **Backend:** Python 3.12.6, Django 5.0.6
 * **Database:** PostgreSQL 15.4 (pgAdmin 7.5 / pgAdmin 4)
@@ -32,7 +32,7 @@ Built as a full-stack web application using Django and PostgreSQL, the system bl
 
 ---
 
-## 🏗️ Post-Implementation Engineering Audit (V1 vs. V2 Roadmap)
+## Post-Implementation Engineering Audit (V1 vs. V2 Roadmap)
 
 The V1 release was designed as a functional prototype to validate the core research premise and evaluate recommendation accuracy. Following a post-implementation code audit, several key optimization targets were identified for better V2) architecture:
 
@@ -51,7 +51,7 @@ The V1 release was designed as a functional prototype to validate the core resea
 
 ---
 
-## 📄 Documentation & Research Paper
+## Documentation & Research Paper
 
 The complete theoretical background, dataset preparation, algorithm evaluations, and user satisfaction results are detailed in the full research paper:
 
