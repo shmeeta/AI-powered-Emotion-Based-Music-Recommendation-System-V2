@@ -11,7 +11,7 @@ from rapidfuzz import fuzz, process
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 
-from .models import FavoriteSong
+from .models import FavoriteSong, DislikedSongs
 
 # access spotify client from settings
 sp = getattr(settings, 'SPOTIFY_CLIENT', None)
@@ -122,6 +122,14 @@ def enter_favorites(request):
                 cover_url=cover_url
             )
             songs_added.append(f"{song_data['track_name']} by {song_data['artist_name']}")
+
+
+            # if a liked song was added that was previously in disliked songs, delete that song to prevent issues 
+            DislikedSongs.objects.filter(
+                user = request.user, 
+                track_name=song_data['track_name'], 
+                artist_name = song_data['artist_name']
+            ).delete()
 
         # user feedback: 
         if songs_added:
