@@ -1,0 +1,8 @@
+.env
+__pycache__/
+*.pyc
+venv/
+.vscode/
+.env.local
+.cache/
+honours_project/song_dataset_16_aug.csv

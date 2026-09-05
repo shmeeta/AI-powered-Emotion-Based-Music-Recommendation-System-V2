@@ -1,0 +1,126 @@
+{% extends "users/base.html" %}
+
+{% block content %}
+<nav class="navbar navbar-expand-lg">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="#">Resonance</a>
+    <button
+      class="navbar-toggler"
+      type="button"
+      data-bs-toggle="collapse"
+      data-bs-target="#navbarContent"
+      aria-controls="navbarContent"
+      aria-expanded="false"
+      aria-label="Toggle navigation"
+    >
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="navbarContent">
+      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+        <li class="nav-item">
+          <a class="nav-link active" href="{% url 'users:home' %}">Home</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'liked_songs:liked_songs' %}">Liked Songs</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'recommendation:get_recommendation' %}">Get Recommendation</a>
+        </li>
+      </ul>
+
+      <div class="d-flex align-items-center">
+        {% if request.user.is_authenticated %}
+          <span class="me-3 fw-bold">Hello, {{ request.user.username }}!</span>
+          <a class="btn btn-outline-danger btn-sm" href="{% url 'users:logout' %}">Logout</a>
+        {% else %}
+          <a class="btn btn-primary btn-sm me-2" href="{% url 'users:login' %}">Login</a>
+          <a class="btn btn-success btn-sm" href="{% url 'users:register' %}">Register</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</nav>
+
+<div class="container mt-4">
+  <img src="/static/users/enter_fav.png" 
+         class="img-fluid" 
+         alt="Responsive image" 
+         style="width: 70%; margin: auto; display: block;">
+
+<p>We recommend adding at least five songs so we can better understand your preferences and refine your recommendations. Our database includes music up to 2023, so please ensure your selections were released before then.</p>
+{% if messages %}
+  {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} mt-3">
+      {{ message }}
+    </div>
+  {% endfor %}
+{% endif %}
+
+{% for i, error in errors.items %}
+  <div class="alert alert-danger">{{ error }}</div>
+{% endfor %}
+<form method="post" id="songsForm">
+  {% csrf_token %}
+  <div id="songs-container">
+    <!-- First song input (default visible) -->
+    <div class="song-entry mb-3">
+      <input type="text" class="form-control mb-2" name="title1" placeholder="Song Title" required>
+      <input type="text" class="form-control mb-2" name="artist1" placeholder="Artist" required>
+    </div>
+  </div>
+
+  <button class="btn btn-link" type="button" id="addSongBtn">+ Add another</button>
+  <br>
+  <button class="btn btn-dark mt-3" type="submit">Continue</button>
+</form>
+</div>
+
+<script>
+  let songCount = 1; 
+  const container = document.getElementById("songs-container");
+  const addSongBtn = document.getElementById("addSongBtn");
+  const form = document.getElementById("songsForm");
+
+  addSongBtn.addEventListener("click", function () {
+    songCount++;
+    const newEntry = document.createElement("div");
+    newEntry.classList.add("song-entry", "mb-3");
+    newEntry.innerHTML = `
+      <input type="text" class="form-control mb-2" name="title${songCount}" placeholder="Song Title">
+      <input type="text" class="form-control mb-2" name="artist${songCount}" placeholder="Artist">
+    `;
+    container.appendChild(newEntry);
+  });
+
+  form.addEventListener("submit", function (event) {
+    const entries = document.querySelectorAll(".song-entry");
+    let valid = true;
+
+    entries.forEach(entry => {
+      const title = entry.querySelector("input[name^='title']").value.trim();
+      const artist = entry.querySelector("input[name^='artist']").value.trim();
+      if ((title && !artist) || (!title && artist)) {
+        valid = false;
+      }
+    });
+
+    // If *all* fields are blank
+    let allBlank = Array.from(entries).every(entry => {
+      const title = entry.querySelector("input[name^='title']").value.trim();
+      const artist = entry.querySelector("input[name^='artist']").value.trim();
+      return !title && !artist;
+    });
+
+    if (!valid) {
+      event.preventDefault();
+      alert("Please fill in both Title and Artist for each song you add.");
+    } else if (allBlank) {
+      event.preventDefault();
+      alert("Please enter at least one song before continuing.");
+    }
+  });
+</script>
+
+{% endblock %}
+

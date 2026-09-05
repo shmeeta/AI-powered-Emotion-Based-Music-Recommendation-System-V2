@@ -1,0 +1,14 @@
+{% extends "users/base.html" %}
+{% load static %}
+{% block content %}
+<div class="card p-4 mx-auto" style="width: 600px; margin-top: 110px;">
+    <img src="/static/users/register_img.png" class="img-fluid" alt="Responsive image" style="width: 70%; margin: auto; padding-bottom: 20px;">
+   
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button class="btn btn-dark mt-2" type="submit">Register</button>
+        <a class="btn btn-link" href="{% url 'users:login' %}">Already have an account?</a>
+    </form>
+</div>
+{% endblock %}

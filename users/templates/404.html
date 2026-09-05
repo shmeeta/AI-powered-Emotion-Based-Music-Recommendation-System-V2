@@ -1,0 +1,17 @@
+{% extends "users/base.html" %}
+{% load static %}
+{% block css_files %} <link rel="stylesheet" href="{% static "users/404.css" %}"> {% endblock %}
+
+
+
+
+{% block content %}
+
+
+<div class="d-flex justify-content-center align-items-center hero-container">
+    <img src="/static/users/errorimg.png" 
+         class="img-fluid" 
+         alt="Responsive image" 
+         style="width: 100%; max-width: 900px; object-fit: cover; object-position: center;">
+</div>
+{% endblock %}

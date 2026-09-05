@@ -1,0 +1,48 @@
+{% extends "users/base.html" %}
+{% load static %}
+
+{% block css_files %}
+<link rel="stylesheet" href="{% static "users/login.css" %}">
+{% endblock %}
+
+{% block content %}
+<style>
+  html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden; /* remove scrollbar completely */
+  }
+</style>
+
+<div class="d-flex justify-content-center align-items-center" style="height: 100vh; width: 100vw;">
+  <div class="card p-4" style="width: 600px;">
+    <img src="/static/users/login.png" 
+         class="img-fluid" 
+         alt="Responsive image" 
+         style="width: 50%; margin: auto; display: block;">
+
+    <form method="post">
+      {% csrf_token %}
+      <div class="mb-3">
+        <label class="form-label">Username</label>
+        <input class="form-control" type="text" name="username" required>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Password</label>
+        <input class="form-control" type="password" name="password" required>
+      </div>
+      <button class="btn btn-dark" type="submit">Login</button>
+      <a class="btn btn-link" href="{% url 'users:register' %}">Don't have an account?</a>
+
+      {% if messages %}
+      <div>
+        {% for message in messages %}
+        <p style="padding-top: 20px; color: red;">{{ message }}</p>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </form>
+  </div>
+</div>
+{% endblock %}

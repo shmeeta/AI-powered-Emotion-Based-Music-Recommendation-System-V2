@@ -1,0 +1,242 @@
+{% extends "users/base.html" %}
+{% load static %}
+
+
+{% block css_files %}
+<link rel="stylesheet" href="{% static "users/get_recommendation.css" %}">
+{% endblock %}
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+{% block content %}
+<nav class="navbar navbar-expand-lg">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="#">Resonance</a>
+    <button
+      class="navbar-toggler"
+      type="button"
+      data-bs-toggle="collapse"
+      data-bs-target="#navbarContent"
+      aria-controls="navbarContent"
+      aria-expanded="false"
+      aria-label="Toggle navigation"
+    >
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="navbarContent">
+      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+        <li class="nav-item">
+          <a class="nav-link active" href="{% url 'users:home' %}">Home</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'liked_songs:liked_songs' %}">Liked Songs</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'recommendation:get_recommendation' %}">Get Recommendation</a>
+        </li>
+      </ul>
+
+     
+        {% if request.user.is_authenticated %}
+          <span class="me-3 fw-bold">Hello, {{ request.user.username }}!</span>
+          <a class="btn btn-outline-danger btn-sm" href="{% url 'users:logout' %}">Logout</a>
+        {% else %}
+          <a class="btn btn-primary btn-sm me-2" href="{% url 'users:login' %}">Login</a>
+          <a class="btn btn-success btn-sm" href="{% url 'register:register' %}">Register</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</nav>
+<div class="container-fluid h-100 d-flex flex-column" >
+<div class="container mt-4" >
+  {% if not hide_intro %}
+  <div class="container mt-4 text-center" style="width: 80%;">
+    <img src="/static/users/how_are_you_feeling.png"  class="img-fluid" alt="Responsive image" style="padding-bottom: 20px;">
+   
+   
+
+    <form method="post" id="recommendationForm">
+  {% csrf_token %}
+  <div class="mb-3">
+    <textarea class="form-control" id="shortText" name="shortText" rows="2" maxlength="280" placeholder="Type here..." style="resize: none;" required></textarea>
+  </div>
+  <button type="submit" class="btn btn-dark" style="font-size: 15px; padding: 5px 10px;">Submit</button>
+</form>
+  
+  {% endif %}
+
+  {% if emotion_result %}
+  <div class="row mt-4">
+    <!-- First column: emotion result -->
+    <div class="col-12 col-md-6 responsive-height" >
+      
+      <!--<h1 class="display-4">Detected Emotion: {{ emotion_result.emotion|title }}</h1> -->
+      {% if emotion_result.emotion|title == "Joy" %}
+      <img src="/static/users/joy.png" class="img-fluid"  alt="joy detected" id="joy-img" width="550" height="165">
+
+      {% elif emotion_result.emotion|title == "Sadness" %}
+       <img src="/static/users/sad.png" class="img-fluid" alt="sadness detected" id="joy-img" style="margin-left: -10px;" height="150">
+
+      {% elif emotion_result.emotion|title == "Love" %}
+       <img src="/static/users/love.png"  class="img-fluid" alt="love detected" id="joy-img" width="500" height="150">
+      {% elif emotion_result.emotion|title == "Anger" %}
+       <img src="/static/users/anger.png"  class="img-fluid" alt="anger detected" id="joy-img" width="500" height="150">
+      
+      {% elif emotion_result.emotion|title == "Fear" %}
+       <img src="/static/users/fear.png" class="img-fluid" alt="fear detected" id="joy-img" width="500" height="150">
+      {% endif %}
+
+      <p style="margin-top: 10px;"><b>Probabilities:</b></p>
+  <div class="d-flex gap-2 flex-wrap">
+  {% for emotion, prob in emotion_result.probabilities %}
+    <div class="badge bg-dark text-white" style="font-size: 0.9rem;">
+      {{ emotion|title }}: {{ prob|floatformat:3 }}
+    </div>
+  {% endfor %}
+</div>
+
+      {% if emotion_result.emotion|title == "Joy" %}
+        <p class="justified" style="margin-top: 10px;" >We're happy to hear that you're having a good day! We detected that you are currently feeling <b>happy</b>. Here are some songs that may match your mood. Please rate them to improve future recommendations.</p>
+        
+      {% elif emotion_result.emotion|title == "Anger" %}
+        <p class="justified" style="margin-top: 10px;" >We're sorry to hear that you're having a bad day! We detected that you are currently feeling <b>angry</b>. Here are some songs that may match your mood. Please rate them to improve future recommendations.</p>
+       
+      {% elif emotion_result.emotion|title == "Sadness" %}
+        <p class="justified" style="margin-top: 10px;" >We're sorry to hear that you're having a bad day! We detected that you are currently feeling <b>sad</b>. Here are some songs that may match your mood. Please rate them to improve future recommendations.</p>
+        
+      {% elif emotion_result.emotion|title == "Love" %}
+        <p class="justified" style="margin-top: 10px;" >We're happy to hear that you're having a good day! We detected that you are currently feeling <b>love</b>. Here are some songs that may match your mood. Please rate them to improve future recommendations.</p>
+      {% elif emotion_result.emotion|title == "Fear" %}
+        <p class="justified" style="margin-top: 10px;" >We're sorry to hear that you're having a bad day! We detected that you are currently feeling <b>afraid, anxious or stressed out</b>. Here are some songs that may match your mood. Please rate them to improve future recommendations.</p>
+      
+      {% else %}
+        <p class="justified">Here are a few music recommendations you might like: </p>
+      {% endif %}
+    </div>
+
+    <!-- Second column: carousel -->
+ 
+    <div class="col-12 col-md-6 responsive-height">
+      <div id="recommendationsCarousel" class="carousel slide mt-3" data-bs-interval="false">
+        <div class="carousel-inner">
+          {% for rec in recommendations %}
+          <div class="carousel-item {% if forloop.first %}active{% endif %}">
+            <div class="position-relative mx-auto" style="width: 60%;"> 
+              <img class="d-block w-100" src="{{ rec.cover_url }}" alt="{{ rec.title }} cover">
+
+              <!-- Controls -->
+              <button class="carousel-control-prev" type="button" data-bs-target="#recommendationsCarousel" data-bs-slide="prev"
+                style="top: 50%; left: -2rem; transform: translateY(-50%);">
+                <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                <span class="visually-hidden">Previous</span>
+              </button>
+
+              <button class="carousel-control-next" type="button" data-bs-target="#recommendationsCarousel" data-bs-slide="next"
+                style="top: 50%; right: -2rem; transform: translateY(-50%);">
+                <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                <span class="visually-hidden">Next</span>
+              </button>
+
+              <!-- Text & rating -->
+              <div style="text-align: center; margin-top: 0.2rem; overflow: hidden;">
+                <h5 style="color: black;">{{ rec.title }}</h5>
+                <p style="color: black;">{{ rec.artist }}</p>
+                  
+                <div class="rating-box" style="transform: scale(0.8); transform-origin: top center;">
+                  <header style="color: black;">Rate this song</header>
+                  <div class="stars">
+                    <i class="bi bi-star"></i>
+                    <i class="bi bi-star"></i>
+                    <i class="bi bi-star"></i>
+                    <i class="bi bi-star"></i>
+                    <i class="bi bi-star"></i>
+                  </div>
+                  <button class="submit rating btn btn-dark" style="margin-top: 10px;">Submit Rating</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+</div>
+
+<script>
+
+  // handle the case where a user submits space/no characters
+ document.addEventListener("DOMContentLoaded", ()=> {
+  const form = document.getElementById("recommendationForm"); 
+  const textarea = document.getElementById("shortText");
+
+  if(form && textarea){
+    form.addEventListener("submit", (e) => {
+      const trimmedValue = textarea.value.trim(); 
+
+      if (trimmedValue===""){
+        event.preventDefault(); 
+        alert("Please enter a valid message. You cannot submit only spaces or leave this blank."); 
+        textarea.value = ""; 
+        textarea.focus();
+      }
+    });
+  }
+
+
+ });
+document.querySelectorAll(".carousel-item").forEach(item => {
+    const stars = item.querySelectorAll(".stars i");
+    const submitBtn = item.querySelector(".submit.rating"); // new
+
+    const title = item.querySelector("h5").innerText;
+    const artist = item.querySelector("p").innerText;
+
+    let selectedRating = 0; // track selected rating
+
+    // Highlight stars on click
+    stars.forEach((star, index1) => {
+      star.addEventListener("click", () => {
+        stars.forEach((s, index2) => {
+          index1 >= index2 ? s.classList.add("active") : s.classList.remove("active");
+        });
+        selectedRating = index1 + 1; // store rating
+        console.log("Selected Rating:", selectedRating, "for", title, "by", artist);
+      });
+    });
+
+    // Send rating only on submit
+    submitBtn.addEventListener("click", () => {
+      if (selectedRating === 0) {
+        alert("Please select a rating before submitting.");
+        return;
+      }
+
+      fetch("{% url 'recommendation:rating' %}", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": "{{ csrf_token }}"
+        },
+        body: JSON.stringify({ title, artist, value: selectedRating })
+      })
+      .then(response => response.json())
+      .then(data => {
+        console.log("Response from Django:", data);
+        submitBtn.disabled = true; // prevent double submission
+        
+      })
+      .catch(error => console.error("Error:", error));
+    });
+  });
+
+
+
+
+</script>
+{% endblock %}
+
+

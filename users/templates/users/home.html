@@ -1,0 +1,58 @@
+{% extends "users/base.html" %}
+
+{% load static %}
+
+{% block css_files %} <link rel="stylesheet" href="{% static "users/home.css" %}"> {% endblock %}
+
+{% block content %}
+<nav class="navbar navbar-expand-lg">
+  <div class="container-fluid">
+
+    <button
+      class="navbar-toggler"
+      type="button"
+      data-bs-toggle="collapse"
+      data-bs-target="#navbarContent"
+      aria-controls="navbarContent"
+      aria-expanded="false"
+      aria-label="Toggle navigation"
+    >
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="navbarContent">
+      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+        <li class="nav-item">
+          <a class="nav-link active" href="#">Home</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'liked_songs:liked_songs' %}">Liked Songs</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'recommendation:get_recommendation' %}">Get Recommendation</a>
+        </li>
+      </ul>
+
+      <div class="d-flex align-items-center">
+        {% if request.user.is_authenticated %}
+          <span class="me-3 fw-bold">Hello, {{ request.user.username }}!</span>
+          <a class="btn btn-outline-dark btn-sm" href="{% url 'users:logout' %}">Logout</a>
+        {% else %}
+          <a class="btn btn-dark btn-sm me-2" href="{% url 'users:login' %}">Login</a>
+          <a class="btn btn-danger btn-sm" href=" {% url 'users:register' %}">Register</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</nav>
+
+<div class="d-flex justify-content-center align-items-center hero-container">
+    <img src="/static/users/home_page.png" 
+         class="img-fluid" 
+         alt="Responsive image" 
+         style="width: 100%; max-width: 900px; object-fit: cover; object-position: center;">
+</div>
+
+
+
+{% endblock %}
