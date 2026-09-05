@@ -58,7 +58,7 @@
     <div class="col-md-4 mb-4">
         <div class="card h-100">
             {% if song.cover_url %}
-                <img src="{{ song.cover_url }}" class="card-img-top" alt="Album cover for {{ song.track_name }}" loading="lazy">
+                <img src="{{ song.cover_url|default:'/static/users/alt_cover.png' }}" class="card-img-top" alt="Album cover for {{ song.track_name }}" loading="lazy">
             {% else %}
                 <img src="https://via.placeholder.com/300x300?text=No+Image" class="card-img-top" alt="No album art available">
             {% endif %}

@@ -39,6 +39,12 @@ if not sp:
       )
   )
 
+# helper function to convert nan values from pandas to defaults 
+def clean_val(val, default="unknown"):
+    if pd.isna(val): 
+        return default
+    else: 
+        return val
 
 # function to check for meaningful text input before classifying 
 def is_meaningful_input(text): 
@@ -84,6 +90,10 @@ def rating(request):
         artist = data.get("artist")
         value = data.get("value")
 
+        # get the cover url 
+        
+        cover_url = data.get("cover_url") or data.get("image_url")
+
 
 
         if artist: 
@@ -104,7 +114,28 @@ def rating(request):
 
         if row.empty: 
             return JsonResponse({"status": "error", "message": "Song not found in dataset."}, status=400)
+
         song_data = row.iloc[0]
+
+        if not cover_url: 
+            cover_url = clean_val(song_data.get('cover_url'), default=None)
+
+        # if still not then query spotify for the api cover
+        if not cover_url: 
+            query = f"track:{song_data['track_name']} artist:{song_data['artist_name']}"
+            try:
+                results = sp.search(q=query, type="track", limit=1)
+                items = results.get('tracks', {}).get('items')
+                if items:
+                    cover_url = items[0]['album']['images'][0]['url']
+            except Exception as e:
+                print(f"Error fetching Spotify cover art for '{song_data['track_name']}': {e}")
+
+        if not cover_url: 
+            cover_url = "/static/users/alt_cover.png"
+
+
+        
         if value > 3 :  # if rated 4 or 5, it becomes a liked song 
             FavoriteSong.objects.create(
                 user=request.user,
@@ -123,6 +154,7 @@ def rating(request):
                 liveness=song_data.get('liveness', "unknown"),
                 valence=song_data.get('valence', "unknown"),
                 tempo=song_data.get('tempo', "unknown"),
+                cover_url=cover_url,
             )
             
         elif value < 3: # if the value is  one or two it becomes a disliked song
