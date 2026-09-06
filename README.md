@@ -54,11 +54,6 @@ The initial release (V1) served as a functional prototype to validate core machi
 
 ---
 
-## Documentation & Research Paper
-
-The complete theoretical background, dataset preparation, algorithm evaluations, and user satisfaction results are detailed in the full research paper:
-
----
 
 ## ⚙️ Quick Start & Local Setup
 
