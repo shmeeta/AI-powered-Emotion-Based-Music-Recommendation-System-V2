@@ -34,17 +34,20 @@ Built as a full-stack web application using Django and PostgreSQL, the system bl
 
 ## Post-Implementation Engineering Audit (V1 vs. V2 Roadmap)
 
-The V1 release was designed as a functional prototype to validate the core research premise and evaluate recommendation accuracy. Following a post-implementation code audit, several key optimization targets were identified for better V2) architecture:
+The initial release (V1) served as a functional prototype to validate core machine learning performance, dataset feature engineering and recommendation accuracy. Since then, key architectural bottlenecks and execution overhead have been identified. The system is currently undergoing a v2 refactor focused on scalability, system decocupling and asynchronous execution.
 
 ### 1. Monolithic View Logic
-* **V1 State:** Core user authentication, session management, liked songs state, and matrix-based recommendation generation are handled within unified view functions.
-* **Impact:** Tight coupling and unnecessary execution overhead during simple routing or authentication steps.
-* **V2 Architecture:** Separate views for each portion of the website.
+* **V1 State:** User authentication, session validation and recommendation matrix calculations were implemented in one Django app and view. This lead to high code complexity and unnecessary execution overhead during basic request routing.
 
+* **V2 Architecture:** Separate views for each portion of the website. Restructure the application layer into smaller, dedicated helper functions so the code is cleaner, easier to test and simpler to manage.
 
+### 2. Synchronous Request-Response Thread Blocking.
+* **V1 State:** Core Machine Learning operations, such as NLP transformer operations, vector math and dynamic clustering are executed synchronously inside the web application request cycle, leading to High HTTP latency ad susceptibility to server timeouts during heavy inference tasks.
+
+* **V2 Architecture:** Decouple computation-heavy ML routines from the HTTP server loop by offloading execution to an background worker process and implementing an asynchronous task-tracking pattern.
 
 ### 3. External API Network Overhead
-* **Current V1 State:** Album cover fetching via the Spotify API occurs synchronously during page rendering.
+* **Current V1 State:** Album cover fetching via the Spotify API occurs synchronously during page rendering. Web server response times are therefore directly tied to third-party API rate limits and network latency.
 * **V2 Architecture:** Implement client-side asynchronous fetching and persist image URLs directly in PostgreSQL to reduce third-party HTTP calls.
 
 ---
