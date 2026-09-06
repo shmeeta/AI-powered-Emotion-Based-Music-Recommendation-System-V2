@@ -55,9 +55,4 @@ The initial release (V1) served as a functional prototype to validate core machi
 ---
 
 
-## ⚙️ Quick Start & Local Setup
 
-1. **Clone the Repository:**
-   ```bash
-   git clone [https://github.com/shmeeta/AI-powered-Emotion-Based-Music-Recommendation-System-V2.git](https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git)
-   cd AI-powered-Emotion-Based-Music-Recommendation-System-V2
