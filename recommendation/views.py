@@ -1,6 +1,10 @@
 import os
 import json
 import re
+import math 
+from sklearn.cluster import MiniBatchKMeans, KMeans
+from sklearn.preprocessing import StandardScaler
+from kneed import KneeLocator
 from concurrent.futures import ThreadPoolExecutor
 from spellchecker import SpellChecker
 from django.http import JsonResponse
@@ -12,8 +16,7 @@ import torch
 from scipy.spatial.distance import cdist
 from sklearn.cluster import KMeans
 from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.preprocessing import OneHotEncoder
-from kneed import KneeLocator
+from sklearn.preprocessing import OneHotEncoder,MinMaxScaler
 
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
@@ -397,158 +400,143 @@ def get_recommendation(request):
         
 
         # one hot encoding for the genre since it is the only non-numerical vector
-        encoder =  OneHotEncoder(sparse_output = False, handle_unknown='ignore')
-        encoded = encoder.fit_transform(user_df[['genre']])
-        encoded_df = pd.DataFrame(
-            encoded,
-            columns=encoder.get_feature_names_out(['genre']),
-            index=user_df.index
-        )
-        user_df_encoded = pd.concat([user_df.drop('genre', axis=1), encoded_df], axis=1)
+        genre_encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
+        genre_encoder.fit(SONG_DATASET[['genre']])
 
-        # for the main dataset encoding
-        dataset_encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
-        dataset_encoded = dataset_encoder.fit_transform(SONG_DATASET[['genre']])
-        encoded_song_dataset = pd.DataFrame(
-            dataset_encoded,
-            columns = dataset_encoder.get_feature_names_out(['genre']),
-            index = SONG_DATASET.index
-        )
-        song_dataset_encoded = pd.concat([SONG_DATASET.drop('genre', axis=1), encoded_song_dataset], axis=1)
+        def encode_genres(df, encoder):
+            encoded = encoder.transform(df[['genre']])
+            encoded_df = pd.DataFrame(
+                encoded, 
+                columns = encoder.get_feature_names_out(['genre']),
+                index=df.index
+            )
+            return pd.concat([df.drop('genre', axis=1), encoded_df], axis=1)
 
+        song_dataset_encoded = encode_genres(SONG_DATASET, genre_encoder)
+        user_df_encoded = encode_genres(user_df, genre_encoder)
 
-        # normalizing main vector values:
-        song_dataset_encoded['loudness'] = (
-            (song_dataset_encoded['loudness']-song_dataset_encoded['loudness'].min())/(song_dataset_encoded['loudness'].max()-song_dataset_encoded['loudness'].min())
-        )
-        song_dataset_encoded['year'] = (
-            (song_dataset_encoded['year']-song_dataset_encoded['year'].min())/(song_dataset_encoded['year'].max()-song_dataset_encoded['year'].min())
-        )
-
-        song_dataset_encoded['tempo'] = (
-            (song_dataset_encoded['tempo']-song_dataset_encoded['tempo'].min())/(song_dataset_encoded['tempo'].max()-song_dataset_encoded['tempo'].min())
-        )
-
-
-        # reindex the dummy encoded to match the main song dataset encded columns
+        # align the user columns to match the dataset structure 
         user_df_encoded_aligned = user_df_encoded.reindex(columns=song_dataset_encoded.columns, fill_value=0)
 
-        # define the actual vector columns - exclude certain columns
-        vector_columns = [c for c in song_dataset_encoded.columns if c not in ['artist_name','track_name','emotion','instrumentalness','liveness','time_signature']]  # year, time_signature
-        # normalizing
-        user_df_encoded_aligned['loudness'] = pd.to_numeric(
-            user_df_encoded_aligned['loudness'], errors='coerce'
-        )
-        user_df_encoded_aligned['loudness'] = (
-            (user_df_encoded_aligned['loudness']-user_df_encoded_aligned['loudness'].min())/(user_df_encoded_aligned['loudness'].max()-user_df_encoded_aligned['loudness'].min())
-        )
-        user_df_encoded_aligned['year'] = pd.to_numeric(
-            user_df_encoded_aligned['year'], errors='coerce'
-        )
+        # fit and transform the minmax scaler to prevent division by zero
+        norm_cols = ['loudness', 'year', 'tempo']
 
-        user_df_encoded_aligned['year'] = (
-            (user_df_encoded_aligned['year']-user_df_encoded_aligned['year'].min())/(user_df_encoded_aligned['year'].max()-user_df_encoded_aligned['year'].min())
-        )
-        user_df_encoded_aligned['tempo'] = pd.to_numeric(
-            user_df_encoded_aligned['tempo'], errors='coerce'
-        )
-        user_df_encoded_aligned['tempo'] = (
-            (user_df_encoded_aligned['tempo']-user_df_encoded_aligned['tempo'].min())/(user_df_encoded_aligned['tempo'].max()-user_df_encoded_aligned['tempo'].min())
-        )
+        for col in norm_cols: 
+            song_dataset_encoded[col] = pd.to_numeric(song_dataset_encoded[col], errors='coerce')
+            user_df_encoded_aligned[col] = pd.to_numeric(user_df_encoded_aligned[col], errors='coerce')
+
+        scaler = MinMaxScaler() 
+        song_dataset_encoded[norm_cols] = scaler.fit_transform(song_dataset_encoded[norm_cols])
+        user_df_encoded_aligned[norm_cols] = scaler.transform(user_df_encoded_aligned[norm_cols])
+
+        exclude_cols = ['artist_name', 'track_name', 'emotion', 'instrumentalness', 'liveness', 'time_signature']
+        vector_columns = [c for c in song_dataset_encoded.columns if c not in exclude_cols]
+
+            
         
       
+        cols =[
+
+            'popularity','year','danceability','energy','loudness','speechiness',
+            'acousticness','instrumentalness','liveness','valence','tempo',
+            'genre_acoustic','genre_afrobeat','genre_altrock','genre_ambient',
+            'genre_blackmetal','genre_blues','genre_breakbeat','genre_cantopop',
+            'genre_chicagohouse','genre_chill','genre_classical','genre_club',
+            'genre_comedy','genre_country','genre_dance','genre_dancehall',
+            'genre_deathmetal','genre_deephouse','genre_detroittechno','genre_disco',
+            'genre_drumandbass','genre_dub','genre_dubstep','genre_edm','genre_electro',
+            'genre_electronic','genre_emo','genre_folk','genre_forro','genre_french',
+            'genre_funk','genre_garage','genre_german','genre_gospel','genre_goth',
+            'genre_grindcore','genre_groove','genre_guitar','genre_hardcore',
+            'genre_hardrock','genre_hardstyle','genre_heavymetal','genre_hiphop',
+            'genre_house','genre_indian','genre_indiepop','genre_industrial','genre_jazz',
+            'genre_kpop','genre_metal','genre_metalcore','genre_minimaltechno','genre_newage',
+            'genre_opera','genre_party','genre_piano','genre_pop','genre_popfilm',
+            'genre_powerpop','genre_progressivehouse','genre_psychrock','genre_punk',
+            'genre_punkrock','genre_rock','genre_rocknroll','genre_romance','genre_sad',
+            'genre_salsa','genre_samba','genre_sertanejo','genre_showtunes',
+            'genre_singersongwriter','genre_ska','genre_sleep','genre_songwriter',
+            'genre_soul','genre_spanish','genre_swedish','genre_tango','genre_techno',
+            'genre_trance','genre_triphop'
+        ]
+
+        num_songs= len(user_df_encoded_aligned)
+
+        if num_songs>5: 
+            X_df = user_df_encoded_aligned[cols].apply(pd.to_numeric, errors='coerce').dropna()
+            valid_indices = X_df.index # keep track of the indices that survived dropna()
+
+            scaler = StandardScaler() # scale the features so the tempo and popularity dont overpower 0/1 genre flags
+            X_scaled = scaler.fit_transform(X_df)
+            print("Length before clustering:", len(X_df))
+
+            # replaced with a dynamic cap for clusters based on N (max 10) to improve efficiency 
+            max_clusters = min(math.ceil(math.sqrt(len(X_df) / 2)) + 1, 10)
+
+            if max_clusters <=2: 
+                n_clusters = min(2, len(X_df))
+            else: 
+                # faster elbow search with minibatchkmeans 
+                wcss = [
+                    MiniBatchKMeans(n_clusters = i, init='k-means++', batch_size=256, random_state=42).fit(X_scaled).inertia_
+                    for i in range (1,max_clusters)
+                ]
+                n_clusters = KneeLocator(
+                    range(1, max_clusters), wcss, curve='convex', direction='decreasing'
+                ).knee
+
+                if n_clusters is None or n_clusters<1: 
+                    n_clusters = min(3,len(X_df))
 
 
-            
-        
-        
-        # if more than 10 songs, use k means clustering to find 5 most similar songs, to keep recommendation numbers at 10
-        if len(user_df_encoded_aligned)  > 5: 
-            #user_df_encoded_aligned.to_csv("user_df_encoded_aligned.csv", index=False)
-            cols =[
-
-                'popularity','year','danceability','energy','loudness','speechiness',
-                'acousticness','instrumentalness','liveness','valence','tempo',
-                'genre_acoustic','genre_afrobeat','genre_altrock','genre_ambient',
-                'genre_blackmetal','genre_blues','genre_breakbeat','genre_cantopop',
-                'genre_chicagohouse','genre_chill','genre_classical','genre_club',
-                'genre_comedy','genre_country','genre_dance','genre_dancehall',
-                'genre_deathmetal','genre_deephouse','genre_detroittechno','genre_disco',
-                'genre_drumandbass','genre_dub','genre_dubstep','genre_edm','genre_electro',
-                'genre_electronic','genre_emo','genre_folk','genre_forro','genre_french',
-                'genre_funk','genre_garage','genre_german','genre_gospel','genre_goth',
-                'genre_grindcore','genre_groove','genre_guitar','genre_hardcore',
-                'genre_hardrock','genre_hardstyle','genre_heavymetal','genre_hiphop',
-                'genre_house','genre_indian','genre_indiepop','genre_industrial','genre_jazz',
-                'genre_kpop','genre_metal','genre_metalcore','genre_minimaltechno','genre_newage',
-                'genre_opera','genre_party','genre_piano','genre_pop','genre_popfilm',
-                'genre_powerpop','genre_progressivehouse','genre_psychrock','genre_punk',
-                'genre_punkrock','genre_rock','genre_rocknroll','genre_romance','genre_sad',
-                'genre_salsa','genre_samba','genre_sertanejo','genre_showtunes',
-                'genre_singersongwriter','genre_ska','genre_sleep','genre_songwriter',
-                'genre_soul','genre_spanish','genre_swedish','genre_tango','genre_techno',
-                'genre_trance','genre_triphop'
-            ]
-            X = user_df_encoded_aligned[cols].apply(pd.to_numeric, errors='coerce').dropna()
-            X_array = X.to_numpy()
-            print("Length before clustering:", len(X))
-            
-            # set the max clusters 
-            max_clusters = len(X)+ 1
-            wcss = []
+            print("optimal number of clusters is ", n_clusters)
 
 
-            for i in range(1, max_clusters):
-                kmeans = KMeans(n_clusters=i, init='k-means++', random_state=42)
-                kmeans.fit(X)
-                wcss.append(kmeans.inertia_)
-            n_clusters = KneeLocator([i for i in range(1,max_clusters)], wcss, curve='convex', direction='decreasing').knee
-            # Fallback if KneeLocator fails
-            if n_clusters is None or n_clusters < 1:
-                n_clusters = 2
-            print("Optimal number of clusters:", n_clusters)
+            kmeans = KMeans(n_clusters = n_clusters, init ='k-means++', random_state=42)
+            y_means = kmeans.fit_predict(X_scaled)
 
 
-            # fit KMeans with optimal clusters
-            kmeans = KMeans(n_clusters=n_clusters, init='k-means++', random_state=42)
-            y_kmeans = kmeans.fit_predict(X)
-            songs_with_clusters = user_df_encoded_aligned.copy()
-            songs_with_clusters['cluster'] = y_kmeans
-
-
-            # get distances and select representatives
             representatives = []
             song_distances = []
-            for cluster_idx in range(n_clusters):
-                cluster_songs_idx = np.where(y_kmeans == cluster_idx)[0]
-                distances = np.linalg.norm(X_array[cluster_songs_idx] - kmeans.cluster_centers_[cluster_idx], axis=1)
-                closest_idx = cluster_songs_idx[np.argmin(distances)]
-                representatives.append(closest_idx)
-                song_distances.extend(list(zip(distances, cluster_songs_idx)))  # store all distances
 
-            remaining_slots = 5 - len(representatives)
-            if remaining_slots > 0: 
-                temp_distances = song_distances.copy()
-                remaining = []
-                while len(remaining) < remaining_slots and temp_distances:
-                    # Find song with min dist
-                    min_dist, min_idx = min(temp_distances, key=lambda x: x[0])
-                    if min_idx not in representatives and min_idx not in remaining:
-                        remaining.append(min_idx)
-                    temp_distances = [item for item in temp_distances if item[1] != min_idx] # remove this song from temp distances
-
-                representatives.extend(remaining)
+            for cluster_idx in range(n_clusters): 
+                cluster_songs_idx = np.where(y_means == cluster_idx)[0]
+                if len(cluster_songs_idx)==0:
+                    continue
+                distances = np.linalg.norm(X_scaled[cluster_songs_idx] - kmeans.cluster_centers_[cluster_idx], axis=1)
+                closest_in_cluster = cluster_songs_idx[np.argmin(distances)]
+                representatives.append(closest_in_cluster)
+                song_distances.extend(zip(distances, cluster_songs_idx))
 
 
-            #get top fve songs
-            top_5_songs = songs_with_clusters.iloc[representatives][['artist_name', 'track_name'] + cols]
-            user_df_encoded_aligned = top_5_songs.reset_index(drop=True)
+            if len(representatives) <5 and song_distances: 
+                dists, indices = zip(*song_distances)
+                sorted_indices = np.array(indices)[np.argsort(dists)]
+
+                for idx in sorted_indices:
+                    if len(representatives) >= 5:
+                        break
+                    if idx not in representatives: 
+                        representatives.append(int(idx))
+
+            selected_df_indices = valid_indices[representatives]
+
+            user_df_encoded_aligned =(
+                user_df_encoded_aligned.loc[selected_df_indices, ['artist_name', 'track_name'] + cols].reset_index(drop=True)
+            )
 
             print("Length of df after clustering:", len(user_df_encoded_aligned))
-            print(user_df_encoded_aligned)
 
 
-            print("length of df after clustering=", len(user_df_encoded_aligned))
+        
+            
+        
+
+        print("Length of df after clustering:", len(user_df_encoded_aligned))
+        print(user_df_encoded_aligned)
+
+
+        print("length of df after clustering=", len(user_df_encoded_aligned))
             
             
   
@@ -631,7 +619,7 @@ def get_recommendation(request):
             for idx in filtered_indices:
                 #handle duplicates
                 track = dataset_tracks[idx]
-                artist = dataset_tracks[idx]
+                artist = dataset_artists[idx]
                 
                 song = (track, artist)
 
@@ -693,4 +681,3 @@ def get_recommendation(request):
         
         "hide_intro" : hide_intro
     })
- 

@@ -92,7 +92,7 @@
         <img src="{% static 'users/square-black-geometric-shape.png' %}" class="card-img-top" alt="Add song">
         <div class="card-body d-flex flex-column justify-content-between">
           <h5 class="card-title">Add A song</h5>
-          <form method="post" action="{% url 'enter_favorites' %}">
+          <form method="post" action="{% url 'liked_songs:enter_favorites' %}">
             {% csrf_token %}
             <button type="submit" class="btn btn-primary mt-auto">Click Here</button>
           </form>
