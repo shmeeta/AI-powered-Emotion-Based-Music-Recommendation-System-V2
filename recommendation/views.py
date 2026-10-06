@@ -3,6 +3,7 @@ import json
 import time
 import re
 import math 
+from sklearn.metrics.pairwise import euclidean_distances
 from sklearn.cluster import MiniBatchKMeans, KMeans
 from sklearn.preprocessing import StandardScaler
 from kneed import KneeLocator
@@ -480,15 +481,13 @@ def get_recommendation(request):
             
   
         # numpy arrays
-        user_final_vectors = user_df_encoded_aligned[vector_columns].values
+        user_final_vectors = user_df_encoded_aligned[vector_columns].to_numpy(dtype=np.float32)
 
-        main_vectors = song_dataset_encoded[vector_columns].values
+        main_vectors = FEATURES.matrix # precomputed once at start up
 
         # if the length of the user vectors is < 5 then attempt the collaborative filtering method do decrease sparseness
       
 
-        user_final_vectors = [np.array(vec,dtype=float) for vec in user_final_vectors]
-        main_vectors = [np.array(vec, dtype=float) for vec in main_vectors]
         print(user_df_encoded_aligned.isna().sum().sum())  # should be 0
 
 
@@ -498,7 +497,7 @@ def get_recommendation(request):
 
         
 
-        distances = cdist(user_final_vectors, main_vectors, metric='euclidean')
+        distances = euclidean_distances(user_final_vectors, main_vectors)
         recommendations = []
         print(f"cdist: {time.perf_counter() - t_start:.2f}s")
         
