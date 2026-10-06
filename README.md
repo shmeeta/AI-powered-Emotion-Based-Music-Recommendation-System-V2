@@ -37,18 +37,18 @@ Built as a full-stack web application using Django and PostgreSQL, the system bl
 The initial release (V1) served as a functional prototype to validate core machine learning performance, dataset feature engineering and recommendation accuracy. Since then, key architectural bottlenecks and execution overhead have been identified. The system is currently undergoing a v2 refactor focused on scalability, system decoupling and asynchronous execution.
 
 ### 1. Monolithic View Logic
-* **V1 State:** User authentication, session validation and recommendation matrix calculations were implemented in one Django app and view. This led to high code complexity and unnecessary execution overhead during basic request routing.
+* **V1 State:** User authentication, session validation and recommendation matrix calculations were implemented in one Django app and view. This led to high code complexity and unnecessary execution overhead during basic request routing. Moved all dataset-only work into a dedicated module and each request now encodes only the user's favourite songs using the already-fitted encoder and scaler. Per-request user encoding dropped to approximately 0.02s and the dataset is no longer re-processed on every click.
 
 * **V2 Architecture:** Separate views for each portion of the website. Restructure the application layer into smaller, dedicated helper functions so the code is cleaner, easier to test and simpler to manage.
 
 ### 2. Synchronous Request-Response Thread Blocking.
 * **V1 State:** Core Machine Learning operations, such as NLP transformer operations, vector math and dynamic clustering are executed synchronously inside the web application request cycle, leading to High HTTP latency and susceptibility to server timeouts during heavy inference tasks.
 
-* **V2 Architecture:** Decouple computation-heavy ML routines from the HTTP server loop by offloading execution to a background worker process and implementing an asynchronous task-tracking pattern.
+* **V2 Architecture:** (Still being implemented) Decouple computation-heavy ML routines from the HTTP server loop by offloading execution to a background worker process and implementing an asynchronous task-tracking pattern.
 
 ### 3. External API Network Overhead
 * **Current V1 State:** Album cover fetching via the Spotify API occurs synchronously during page rendering. Web server response times are therefore directly tied to third-party API rate limits and network latency.
-* **V2 Architecture:** Implement client-side asynchronous fetching and persist image URLs directly in PostgreSQL to reduce third-party HTTP calls.
+* **V2 Architecture:** Cover lookups are cached by (track, artist), so repeat lookups avoid the API entirely. Failed lookups are not cached deliberately. The Spotify client uses an in-memory token cache, request timeout and no retry-on-429 so throttling produced a placeholder image instead of a blocked page. Also requests the 300px album image instead of 640px to reduce the size of the download.
 
 ---
 
