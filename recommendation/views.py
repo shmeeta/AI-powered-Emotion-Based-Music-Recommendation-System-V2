@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import re
 import math 
 from sklearn.cluster import MiniBatchKMeans, KMeans
@@ -30,8 +31,10 @@ from django.contrib import messages
 
 from django.conf import settings
 
-SONG_DATASET = pd.read_csv('song_dataset_16_aug.csv')
+from .song_features import get_song_features, build_user_df, encode_user_df
 
+SONG_DATASET = pd.read_csv('song_dataset_16_aug.csv')
+FEATURES= get_song_features(SONG_DATASET)
 
 # access spotify client from settings
 sp = getattr(settings, 'SPOTIFY_CLIENT', None)
@@ -291,6 +294,9 @@ def collaborative_filtering(username):
 
 @login_required
 def get_recommendation(request):
+    t_start = time.perf_counter()
+
+   
     songs_qs = FavoriteSong.objects.filter(user=request.user)
     if not songs_qs: 
      
@@ -344,10 +350,10 @@ def get_recommendation(request):
         print("DEBUG id2label_mapping:",label_map)
         print("DEBUG predicted_idx:", predicted_idx)
         print("DEBUG str(predicted_idx):", str(predicted_idx))
-
+      
 
         predicted_label = label_map[str(predicted_idx)]
-
+        
 
         emotion_probabilities = []
         for i, prob in enumerate(probs):
@@ -367,6 +373,8 @@ def get_recommendation(request):
         # setting the emotion to the actual emotion and not the number + lowercase
 
         emotion_string = emotion_result["emotion"].lower()
+        print(f"emotion model: {time.perf_counter() - t_start:.2f}s")
+
 
         # build the vectors
     
@@ -376,91 +384,19 @@ def get_recommendation(request):
 
         # get the users disliked songs
         disliked_songs = DislikedSongs.objects.filter(user=request.user)
-        user_vectors= []
-        for song in songs_qs:
-            vector =[
-                song.artist_name,
-                song.track_name,
-                song.popularity,
-                song.year,
-                song.genre,
-                song.danceability,
-                song.energy,
-                song.loudness,
-                song.speechiness,
-                song.acousticness,
-                song.instrumentalness,
-                song.liveness,
-                song.valence,
-                song.tempo,
-            ]
-            user_vectors.append(vector)
-        # create a df for the user:
-        user_df = pd.DataFrame(user_vectors, columns =['artist_name','track_name','popularity','year','genre','danceability','energy','loudness','speechiness','acousticness','instrumentalness','liveness','valence','tempo'])
+        user_df = build_user_df(songs_qs)
+        user_encoded = encode_user_df(user_df, FEATURES)
+        user_matrix = user_encoded[FEATURES.vector_columns].to_numpy(dtype=np.float32)
+        num_songs= len(user_encoded)
         
+        # aliases for testing 
+        user_df_encoded_aligned = user_encoded
+        song_dataset_encoded = FEATURES.encoded
+        vector_columns = FEATURES.vector_columns 
+        cols = FEATURES.vector_columns
+        print(f"user encoding: {time.perf_counter() - t_start:.2f}s")
 
-        # one hot encoding for the genre since it is the only non-numerical vector
-        genre_encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
-        genre_encoder.fit(SONG_DATASET[['genre']])
 
-        def encode_genres(df, encoder):
-            encoded = encoder.transform(df[['genre']])
-            encoded_df = pd.DataFrame(
-                encoded, 
-                columns = encoder.get_feature_names_out(['genre']),
-                index=df.index
-            )
-            return pd.concat([df.drop('genre', axis=1), encoded_df], axis=1)
-
-        song_dataset_encoded = encode_genres(SONG_DATASET, genre_encoder)
-        user_df_encoded = encode_genres(user_df, genre_encoder)
-
-        # align the user columns to match the dataset structure 
-        user_df_encoded_aligned = user_df_encoded.reindex(columns=song_dataset_encoded.columns, fill_value=0)
-
-        # fit and transform the minmax scaler to prevent division by zero
-        norm_cols = ['loudness', 'year', 'tempo']
-
-        for col in norm_cols: 
-            song_dataset_encoded[col] = pd.to_numeric(song_dataset_encoded[col], errors='coerce')
-            user_df_encoded_aligned[col] = pd.to_numeric(user_df_encoded_aligned[col], errors='coerce')
-
-        scaler = MinMaxScaler() 
-        song_dataset_encoded[norm_cols] = scaler.fit_transform(song_dataset_encoded[norm_cols])
-        user_df_encoded_aligned[norm_cols] = scaler.transform(user_df_encoded_aligned[norm_cols])
-
-        exclude_cols = ['artist_name', 'track_name', 'emotion', 'instrumentalness', 'liveness', 'time_signature']
-        vector_columns = [c for c in song_dataset_encoded.columns if c not in exclude_cols]
-
-            
-        
-      
-        cols =[
-
-            'popularity','year','danceability','energy','loudness','speechiness',
-            'acousticness','instrumentalness','liveness','valence','tempo',
-            'genre_acoustic','genre_afrobeat','genre_altrock','genre_ambient',
-            'genre_blackmetal','genre_blues','genre_breakbeat','genre_cantopop',
-            'genre_chicagohouse','genre_chill','genre_classical','genre_club',
-            'genre_comedy','genre_country','genre_dance','genre_dancehall',
-            'genre_deathmetal','genre_deephouse','genre_detroittechno','genre_disco',
-            'genre_drumandbass','genre_dub','genre_dubstep','genre_edm','genre_electro',
-            'genre_electronic','genre_emo','genre_folk','genre_forro','genre_french',
-            'genre_funk','genre_garage','genre_german','genre_gospel','genre_goth',
-            'genre_grindcore','genre_groove','genre_guitar','genre_hardcore',
-            'genre_hardrock','genre_hardstyle','genre_heavymetal','genre_hiphop',
-            'genre_house','genre_indian','genre_indiepop','genre_industrial','genre_jazz',
-            'genre_kpop','genre_metal','genre_metalcore','genre_minimaltechno','genre_newage',
-            'genre_opera','genre_party','genre_piano','genre_pop','genre_popfilm',
-            'genre_powerpop','genre_progressivehouse','genre_psychrock','genre_punk',
-            'genre_punkrock','genre_rock','genre_rocknroll','genre_romance','genre_sad',
-            'genre_salsa','genre_samba','genre_sertanejo','genre_showtunes',
-            'genre_singersongwriter','genre_ska','genre_sleep','genre_songwriter',
-            'genre_soul','genre_spanish','genre_swedish','genre_tango','genre_techno',
-            'genre_trance','genre_triphop'
-        ]
-
-        num_songs= len(user_df_encoded_aligned)
 
         if num_songs>5: 
             X_df = user_df_encoded_aligned[cols].apply(pd.to_numeric, errors='coerce').dropna()
@@ -526,6 +462,9 @@ def get_recommendation(request):
             )
 
             print("Length of df after clustering:", len(user_df_encoded_aligned))
+            print(f"clustering: {time.perf_counter() - t_start:.2f}s")
+
+          
 
 
         
@@ -561,6 +500,7 @@ def get_recommendation(request):
 
         distances = cdist(user_final_vectors, main_vectors, metric='euclidean')
         recommendations = []
+        print(f"cdist: {time.perf_counter() - t_start:.2f}s")
         
         top_n = 2  # top two recommendations per song // ensure 10 recs
         liked_pairs = set(
@@ -635,12 +575,13 @@ def get_recommendation(request):
                 })
                 rec_pair.add(song)
             
-
+        print(f"rec loop: {time.perf_counter() - t_start:.2f}s")
         
 
         # returning the album cover, name and title using the spotify api, similar to liked songs
         
         print(recommendations)
+      
 
         # if len(recommendations)<10, implement  collaborative filtering, will return 10-x songs
         
@@ -670,8 +611,11 @@ def get_recommendation(request):
 
         print("length of recs", len(recommendations)) # for debugging
 
+        t0 = time.perf_counter()
         with ThreadPoolExecutor(max_workers = 5) as executor: 
             songs_with_cover_art = list(executor.map(fetch_song_cover, recommendations))
+
+        print(f"the cover art fetch took {time.perf_counter() - t0:.2f}s")
         hide_intro = True
       
    
