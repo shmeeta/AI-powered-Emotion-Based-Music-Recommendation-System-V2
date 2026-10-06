@@ -1,8 +1,12 @@
 import os
 import json
 import time
+import requests
+import hashlib
+from django.core.cache import cache
 import re
 import math 
+from spotipy.cache_handler import MemoryCacheHandler
 from sklearn.metrics.pairwise import euclidean_distances
 from sklearn.cluster import MiniBatchKMeans, KMeans
 from sklearn.preprocessing import StandardScaler
@@ -36,6 +40,14 @@ from .song_features import get_song_features, build_user_df, encode_user_df
 
 SONG_DATASET = pd.read_csv('song_dataset_16_aug.csv')
 FEATURES= get_song_features(SONG_DATASET)
+FALLBACK_COVER = static("users/alt_cover.png")
+
+
+
+def cover_cache_key(track, artist): 
+    raw = f"{track}|{artist}".lower()
+    return "cover:" + hashlib.md5(raw.encode()).hexdigest()
+
 
 # access spotify client from settings
 sp = getattr(settings, 'SPOTIFY_CLIENT', None)
@@ -44,33 +56,46 @@ if not sp:
       auth_manager=SpotifyClientCredentials(
           client_id=os.environ.get('SPOTIFY_CLIENT_ID'),
           client_secret=os.environ.get('SPOTIFY_CLIENT_SECRET'),
-      )
+          cache_handler = MemoryCacheHandler(),
+      ), 
+      requests_timeout = 5, 
+      retries = 1,
   )
 
 # helper function to fetch cover art 
 def fetch_song_cover(x):
     track = x["track"]
     artist = x["artist"]
-    cover_url = None 
+
+    key = cover_cache_key(track, artist)
+    cached= cache.get(key)
+    if cached is not None: 
+        return {"title": track, "artist": artist, "cover_url": cached}
     query = f"track:{track} artist:{artist}"
+    cover_url = FALLBACK_COVER
+    cacheable = False
 
     try: 
+        t0 = time.perf_counter()
         results = sp.search(q=query, type="track", limit=1)
-        items = results.get('tracks',{}).get('items', [])
-        if items and items[0]['album']['images']:
-            cover_url= items[0]['album']['images'][0]['url']
-        else:
-            cover_url = static("users/alt_cover.png")
+        print(f"spotify search '{track}': {time.perf_counter() - t0:.2f}s")
+
+        items = results.get("tracks", {}).get("items", [])
+        if items and items[0]["album"]["images"]:
+         
+         images = items[0]["album"]["images"]
+         cover_url = images[1]["url"] if len(images) > 1 else images[0]["url"] # images are ordered largest first
+
+        cacheable = True
     except Exception as e: 
-        print(f"Error fetching the cover art for '{track}: {e}")
-        cover_url = static("users/alt_cover.png")
+        print(f"Error fetching the cover art for '{track}': {e}")
 
-    return{
-        'title': track, 
-        'artist': artist, 
-        'cover_url': cover_url, 
+    if cacheable: 
+        cache.set(key, cover_url, 60*60*24*7)
 
-    }
+    return {"title": track, "artist": artist, "cover_url": cover_url}
+
+    
 
 
 
@@ -611,7 +636,7 @@ def get_recommendation(request):
         print("length of recs", len(recommendations)) # for debugging
 
         t0 = time.perf_counter()
-        with ThreadPoolExecutor(max_workers = 5) as executor: 
+        with ThreadPoolExecutor(max_workers = 10) as executor: 
             songs_with_cover_art = list(executor.map(fetch_song_cover, recommendations))
 
         print(f"the cover art fetch took {time.perf_counter() - t0:.2f}s")
