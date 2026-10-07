@@ -1,16 +1,13 @@
 import os
 import json
 import time
-import requests
+
 import hashlib
 from django.core.cache import cache
 import re
-import math 
+
 from spotipy.cache_handler import MemoryCacheHandler
 from sklearn.metrics.pairwise import euclidean_distances
-from sklearn.cluster import MiniBatchKMeans, KMeans
-from sklearn.preprocessing import StandardScaler
-from kneed import KneeLocator
 from concurrent.futures import ThreadPoolExecutor
 from spellchecker import SpellChecker
 from django.http import JsonResponse
@@ -22,21 +19,17 @@ import torch
 from scipy.spatial.distance import cdist
 from sklearn.cluster import KMeans
 from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.preprocessing import OneHotEncoder,MinMaxScaler
-
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.templatetags.static import static
-
 from liked_songs.models import FavoriteSong, DislikedSongs
 from .model_loader import tokenizer, model
 from django.shortcuts import render, redirect 
 from django.contrib import messages
-
 from django.conf import settings
-
 from .song_features import get_song_features, build_user_df, encode_user_df
+from .collaborative_filtering import collaborative_filtering
 from .clustering import select_representative_songs
 SONG_DATASET = pd.read_csv('song_dataset_16_aug.csv')
 FEATURES= get_song_features(SONG_DATASET)
@@ -96,13 +89,6 @@ def fetch_song_cover(x):
     return {"title": track, "artist": artist, "cover_url": cover_url}
 
     
-
-
-
-
-
-
-
 # helper function to convert nan values from pandas to defaults 
 def clean_val(val, default="unknown"):
     if pd.isna(val): 
@@ -246,78 +232,6 @@ def rating(request):
         return JsonResponse({"status": "ok", "received": value})
 
 
-
-
-# implement collaborative filtering - get user item matrix + cosine similarity
-def collaborative_filtering(username):
-    data = []
-
-    # Collect all ratings from FavoriteSong
-    for entry in FavoriteSong.objects.all():
-        try:
-            rating = int(entry.rating)
-        except (ValueError, TypeError):
-            rating = np.nan
-
-        data.append({
-            "song_id": entry.id,                 
-            "username": entry.user.username,
-            "artist": entry.artist_name,
-            "track_name": entry.track_name,
-            "genre": entry.genre,
-            "valence": entry.valence,
-            "rating": rating,
-        })
-
-    # Collect all ratings from DislikedSongs
-    for entry in DislikedSongs.objects.all():
-        try:
-            rating = int(entry.rating)
-        except (ValueError, TypeError):
-            rating = np.nan
-
-        data.append({
-            "song_id": entry.id,                  
-            "username": entry.user.username,
-            "artist": entry.artist_name,
-            "track_name": entry.track_name,
-            "genre": entry.genre,
-            "valence": entry.valence,
-            "rating": rating,
-        })
-
-    # Convert to DataFrame
-    user_song_ratings = pd.DataFrame(data)
-
-    
-    #user_song_ratings.to_csv("user_song_ratings.csv", index=False)   
-    # form the user item matrix using pivot 
-    user_song_ratings_pivot = user_song_ratings.pivot_table(index='username', columns='track_name', values='rating', fill_value=0)  # fill the missing ratings with 0
-
-    #similarity matrix
-    similarity_matrix = cosine_similarity(user_song_ratings_pivot)
-    similarity_matrix_df = pd.DataFrame(similarity_matrix, index=user_song_ratings_pivot.index, columns = user_song_ratings_pivot.index)
-
-    #similarity_matrix_df.to_csv("similarity_matrix.csv", index=False)
-    user_name = username
-    similarities = similarity_matrix_df[user_name].drop(user_name)
-    weights = similarities/similarities.sum()
-    n= 10 # number of similar users 
-    user_similarity_threshold = 0.1 #change according to size of user database 
-
-    # get the top similar users
-    most_similar_user = similarity_matrix_df[similarity_matrix_df[user_name]>user_similarity_threshold][user_name].sort_values(ascending=False)[:n]
-    if most_similar_user.index[0] == user_name: 
-        most_similar_user = most_similar_user[1:] # remove the first element to inhibit same username being returned
-    
-    no_sim_user = "There are no similar users."
-    if most_similar_user.empty: 
-        return no_sim_user
-    else: 
-        return most_similar_user.index[0]
-  
-
-
 @login_required
 def get_recommendation(request):
     t_start = time.perf_counter()
@@ -418,9 +332,6 @@ def get_recommendation(request):
         user_df_encoded_aligned = select_representative_songs(user_encoded, FEATURES.vector_columns)
 
 
-        
-            
-  
         # numpy arrays
         user_final_vectors = user_df_encoded_aligned[vector_columns].to_numpy(dtype=np.float32)
 
@@ -435,7 +346,6 @@ def get_recommendation(request):
         # CALCULATING THE SIMILARITY SCORES USING EUCLIDEAN DISTANCE:
         def get_euclidean_distance(a,b):
             return np.linalg.norm(a - b)
-
         
 
         distances = euclidean_distances(user_final_vectors, main_vectors)
@@ -458,8 +368,6 @@ def get_recommendation(request):
             dataset_emotions = SONG_DATASET['emotion'].values
             dataset_tracks = SONG_DATASET['track_name'].values
             dataset_artists = SONG_DATASET['artist_name'].values
-
-
 
 
             for idx in sorted_indices:
@@ -521,8 +429,6 @@ def get_recommendation(request):
         # returning the album cover, name and title using the spotify api, similar to liked songs
         
         print(recommendations)
-      
-
         # if len(recommendations)<10, implement  collaborative filtering, will return 10-x songs
         
         if len(recommendations) <10: 
@@ -546,8 +452,7 @@ def get_recommendation(request):
                      recommendations.append({"track": song.track_name, "artist": song.artist_name})
                      existing_songs.add((song.track_name, song.artist_name))
 
-            
-            
+         
 
         print("length of recs", len(recommendations)) # for debugging
 
