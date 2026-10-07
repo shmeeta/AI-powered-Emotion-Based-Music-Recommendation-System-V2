@@ -636,7 +636,7 @@ def get_recommendation(request):
         print("length of recs", len(recommendations)) # for debugging
 
         t0 = time.perf_counter()
-        with ThreadPoolExecutor(max_workers = 10) as executor: 
+        with ThreadPoolExecutor(max_workers = 5) as executor: 
             songs_with_cover_art = list(executor.map(fetch_song_cover, recommendations))
 
         print(f"the cover art fetch took {time.perf_counter() - t0:.2f}s")
