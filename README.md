@@ -44,7 +44,7 @@ The initial release (V1) served as a functional prototype to validate core machi
 ### 2. Synchronous Request-Response Thread Blocking.
 * **V1 State:** Core Machine Learning operations, such as NLP transformer operations, vector math and dynamic clustering are executed synchronously inside the web application request cycle, leading to High HTTP latency and susceptibility to server timeouts during heavy inference tasks.
 
-* **V2 Architecture:** (Still being implemented) Decouple computation-heavy ML routines from the HTTP server loop by offloading execution to a background worker process and implementing an asynchronous task-tracking pattern.
+* **V2 Architecture:** (Still being implemented/ in the planning phase) Decouple computation-heavy ML routines from the HTTP server loop by offloading execution to a background worker process and implementing an asynchronous task-tracking pattern to improve responsiveness and concurrency.
 
 ### 3. External API Network Overhead
 * **Current V1 State:** Album cover fetching via the Spotify API occurs synchronously during page rendering. Web server response times are therefore directly tied to third-party API rate limits and network latency.
