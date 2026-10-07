@@ -37,7 +37,7 @@ from django.contrib import messages
 from django.conf import settings
 
 from .song_features import get_song_features, build_user_df, encode_user_df
-
+from .clustering import select_representative_songs
 SONG_DATASET = pd.read_csv('song_dataset_16_aug.csv')
 FEATURES= get_song_features(SONG_DATASET)
 FALLBACK_COVER = static("users/alt_cover.png")
@@ -321,7 +321,6 @@ def collaborative_filtering(username):
 @login_required
 def get_recommendation(request):
     t_start = time.perf_counter()
-
    
     songs_qs = FavoriteSong.objects.filter(user=request.user)
     if not songs_qs: 
@@ -401,13 +400,6 @@ def get_recommendation(request):
         emotion_string = emotion_result["emotion"].lower()
         print(f"emotion model: {time.perf_counter() - t_start:.2f}s")
 
-
-        # build the vectors
-    
-        
-        
-      
-
         # get the users disliked songs
         disliked_songs = DislikedSongs.objects.filter(user=request.user)
         user_df = build_user_df(songs_qs)
@@ -422,87 +414,11 @@ def get_recommendation(request):
         cols = FEATURES.vector_columns
         print(f"user encoding: {time.perf_counter() - t_start:.2f}s")
 
-
-
-        if num_songs>5: 
-            X_df = user_df_encoded_aligned[cols].apply(pd.to_numeric, errors='coerce').dropna()
-            valid_indices = X_df.index # keep track of the indices that survived dropna()
-
-            scaler = StandardScaler() # scale the features so the tempo and popularity dont overpower 0/1 genre flags
-            X_scaled = scaler.fit_transform(X_df)
-            print("Length before clustering:", len(X_df))
-
-            # replaced with a dynamic cap for clusters based on N (max 10) to improve efficiency 
-            max_clusters = min(math.ceil(math.sqrt(len(X_df) / 2)) + 1, 10)
-
-            if max_clusters <=2: 
-                n_clusters = min(2, len(X_df))
-            else: 
-                # faster elbow search with minibatchkmeans 
-                wcss = [
-                    MiniBatchKMeans(n_clusters = i, init='k-means++', batch_size=256, random_state=42).fit(X_scaled).inertia_
-                    for i in range (1,max_clusters)
-                ]
-                n_clusters = KneeLocator(
-                    range(1, max_clusters), wcss, curve='convex', direction='decreasing'
-                ).knee
-
-                if n_clusters is None or n_clusters<1: 
-                    n_clusters = min(3,len(X_df))
-
-
-            print("optimal number of clusters is ", n_clusters)
-
-
-            kmeans = KMeans(n_clusters = n_clusters, init ='k-means++', random_state=42)
-            y_means = kmeans.fit_predict(X_scaled)
-
-
-            representatives = []
-            song_distances = []
-
-            for cluster_idx in range(n_clusters): 
-                cluster_songs_idx = np.where(y_means == cluster_idx)[0]
-                if len(cluster_songs_idx)==0:
-                    continue
-                distances = np.linalg.norm(X_scaled[cluster_songs_idx] - kmeans.cluster_centers_[cluster_idx], axis=1)
-                closest_in_cluster = cluster_songs_idx[np.argmin(distances)]
-                representatives.append(closest_in_cluster)
-                song_distances.extend(zip(distances, cluster_songs_idx))
-
-
-            if len(representatives) <5 and song_distances: 
-                dists, indices = zip(*song_distances)
-                sorted_indices = np.array(indices)[np.argsort(dists)]
-
-                for idx in sorted_indices:
-                    if len(representatives) >= 5:
-                        break
-                    if idx not in representatives: 
-                        representatives.append(int(idx))
-
-            selected_df_indices = valid_indices[representatives]
-
-            user_df_encoded_aligned =(
-                user_df_encoded_aligned.loc[selected_df_indices, ['artist_name', 'track_name'] + cols].reset_index(drop=True)
-            )
-
-            print("Length of df after clustering:", len(user_df_encoded_aligned))
-            print(f"clustering: {time.perf_counter() - t_start:.2f}s")
-
-          
+        # clustering 
+        user_df_encoded_aligned = select_representative_songs(user_encoded, FEATURES.vector_columns)
 
 
         
-            
-        
-
-        print("Length of df after clustering:", len(user_df_encoded_aligned))
-        print(user_df_encoded_aligned)
-
-
-        print("length of df after clustering=", len(user_df_encoded_aligned))
-            
             
   
         # numpy arrays
